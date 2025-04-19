@@ -296,6 +296,46 @@ class GameServer(Supervisor):
         for id, conn in self.clients.items():
             if id != sender:
                 conn.sendall(message.encode("utf-8"))
+    
+    def update_roles_based_on_proximity(self):
+        """Update roles: assign Striker to closest player to ball per team; others become Midfielders."""
+        print("🧠 Role update check triggered.")
+        team_roles = {1: [], 2: []}
+
+        # Group player distances by team
+        ball_position = self.ball.getPosition()
+        for player_id, state in self.player_states.items():
+            team = 1 if self.team1.has(player_id) else 2
+            if state[0] != "Goalie":
+                pos = state[2]
+                distance = self.get_distance(pos, ball_position)
+                team_roles[team].append((player_id, distance))
+
+        for team, players in team_roles.items():
+            if not players:
+                continue
+
+            # Sort by distance to ball
+            players.sort(key=lambda x: x[1])
+            closest_player = players[0][0]
+
+            print(f"🔍 Team {team} - Closest to ball: {closest_player}")  
+
+            # Assign roles
+            for i, (player_id, _) in enumerate(players):
+                new_role = "Striker" if player_id == closest_player else "Midfielder"
+                if self.player_states[player_id][0] != new_role:
+                    print(f"🔁 Changing {player_id} to {new_role}")
+                    self.player_states[player_id][0] = new_role
+                    self.broadcast(f"ROLE|{player_id}|{new_role}\n")
+                    
+                    last = self.last_roles.get(player_id)
+                    if last != new_role:
+                        if new_role == "Striker":
+                            print(f"⚽ {player_id} is now the closest and becomes Striker.", flush=True)
+                        else:
+                            print(f"📥 {player_id} is no longer closest and becomes Midfielder.", flush=True)
+                        self.last_roles[player_id] = new_role
 
 host = "127.0.0.1"
 port = 5555
@@ -311,3 +351,4 @@ timestep = int(game_server.getBasicTimeStep())
 while game_server.step(timestep) != 1:
     if game_server.game_started:
         game_server.send_ball_position()
+        game_server.update_roles_based_on_proximity()

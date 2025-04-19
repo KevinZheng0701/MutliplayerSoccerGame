@@ -433,7 +433,12 @@ class SoccerRobot(Nao):
         """Determine what to do based on role and current game state"""
         if not self.is_motion_over():
             return
-        print(self.state, self.role)
+        #print(self.state, self.role)
+        # Log only if something changed
+        if self.state != getattr(self, "last_logged_state", None) or self.role != getattr(self, "last_logged_role", None):
+            print(self.state, self.role)
+            self.last_logged_state = self.state
+            self.last_logged_role = self.role
         # If the robot has fallen then ensure it is getting up first
         if self.has_fallen():
             self.play_standup_motion()
